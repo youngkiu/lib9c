@@ -10,6 +10,7 @@ namespace Lib9c
     public class DebugPolicy : IBlockPolicy<PolymorphicAction<ActionBase>>
     {
         public IAction BlockAction { get; } = new RewardGold();
+        public int MaxTransactionsPerBlock { get; }
 
         public InvalidBlockException ValidateNextBlock(
             BlockChain<PolymorphicAction<ActionBase>> blocks,
@@ -22,6 +23,11 @@ namespace Lib9c
         public long GetNextBlockDifficulty(BlockChain<PolymorphicAction<ActionBase>> blocks)
         {
             return blocks.Tip is null ? 0 : 1;
+        }
+
+        public int GetMaxBlockBytes(long index)
+        {
+            throw new System.NotImplementedException();
         }
 
         public bool DoesTransactionFollowsPolicy(

@@ -35,7 +35,7 @@ namespace Nekoyume.BlockChain
                     Address,
                     DateTimeOffset.UtcNow,
                     cancellationToken: cancellationToken,
-                    txBatchSize: txBatchSize);
+                    maxTransactions: 10);
 
                 if (_swarm.Running)
                 {

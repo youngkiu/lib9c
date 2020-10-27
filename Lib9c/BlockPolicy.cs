@@ -27,10 +27,11 @@ namespace Nekoyume.BlockChain
             Func<Transaction<NCAction>, BlockChain<NCAction>, bool> doesTransactionFollowPolicy = null
         ) : base(
                 blockAction,
-                blockInterval,
+                blockInterval.Milliseconds,
                 minimumDifficulty,
                 difficultyBoundDivisor,
-                doesTransactionFollowPolicy)
+                maxBlockBytes: 11185640,
+                doesTransactionFollowPolicy: doesTransactionFollowPolicy)
         {
             _minimumDifficulty = minimumDifficulty;
             _difficultyBoundDivisor = difficultyBoundDivisor;
@@ -132,6 +133,7 @@ namespace Nekoyume.BlockChain
                 miner
             );
         }
+        
 
         private bool IsTargetBlock(long blockIndex)
         {

@@ -45,13 +45,13 @@ namespace Nekoyume.BlockChain
                     Address,
                     DateTimeOffset.UtcNow,
                     cancellationToken: cancellationToken,
-                    txBatchSize: txBatchSize);
+                    maxTransactions: 10);
                 
                 subBlock = await _subChain.MineBlock(
                     Address,
                     DateTimeOffset.UtcNow,
                     cancellationToken: cancellationToken,
-                    txBatchSize: txBatchSize);
+                    maxTransactions: 10);
 
                 if (_reorgInterval != 0 && subBlock.Index % _reorgInterval == 0)
                 {
