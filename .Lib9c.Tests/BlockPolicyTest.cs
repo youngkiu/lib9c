@@ -3,6 +3,7 @@ namespace Lib9c.Tests
     using System;
     using System.Collections.Generic;
     using System.Collections.Immutable;
+    using System.Security.Cryptography;
     using System.Threading.Tasks;
     using Bencodex.Types;
     using Libplanet;
@@ -12,17 +13,59 @@ namespace Lib9c.Tests
     using Libplanet.Blockchain.Policies;
     using Libplanet.Blocks;
     using Libplanet.Crypto;
+    using Libplanet.RocksDBStore;
     using Libplanet.Store;
     using Libplanet.Tx;
     using Nekoyume.Action;
     using Nekoyume.BlockChain;
     using Nekoyume.Model;
     using Nekoyume.Model.State;
+    using Serilog;
     using Serilog.Core;
     using Xunit;
 
     public class BlockPolicyTest
     {
+        private ILogger _logger;
+
+        public BlockPolicyTest()
+        {
+            _logger = Log.ForContext<BlockPolicyTest>();
+        }
+
+#pragma warning disable MEN002 // Line is too long
+        [Fact]
+        public void MeasureForkDelay()
+        {
+            var store = new RocksDBStore(@"C:\Users\riema\AppData\Local\planetarium\9c-internal-normal");
+            var stateStore = new TrieStateStore(
+                new RocksDBKeyValueStore(@"C:\Users\riema\AppData\Local\planetarium\9c-internal-normal\states"),
+                new RocksDBKeyValueStore(@"C:\Users\riema\AppData\Local\planetarium\9c-internal-normal\state_hashes")
+            );
+            var genesis = store.GetBlock<PolymorphicAction<ActionBase>>(
+                new HashDigest<SHA256>(ByteUtil.ParseHex("4582250d0da33b06779a8475d283d5dd210c683b9b999d74d03fac4f58fa6bce"))
+            );
+            var bc = new BlockChain<PolymorphicAction<ActionBase>>(
+                new BlockPolicySource(Logger.None).GetPolicy(500000, 10000),
+                store,
+                stateStore,
+                genesis,
+                new[] { new BlockPolicySource(_logger).LoggedActionRenderer, }
+            );
+
+            var forked = bc.Fork(bc[255721].Hash);
+
+            var abnormalBlock = bc[255722];
+            var state = abnormalBlock.Evaluate(
+                DateTimeOffset.UtcNow,
+                address => forked.GetState(address, abnormalBlock.Hash),
+                (address, currency) => forked.GetBalance(address, currency, abnormalBlock.Hash));
+            forked.Append(abnormalBlock);
+
+            Assert.True(true);
+        }
+#pragma warning restore MEN002 // Line is too long
+
         [Fact]
         public void DoesTransactionFollowsPolicyWithEmpty()
         {
