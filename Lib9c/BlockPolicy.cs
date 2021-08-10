@@ -5,6 +5,8 @@ using Libplanet.Blocks;
 using Libplanet.Tx;
 using System;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Collections.Generic;
 using Lib9c;
 using Libplanet;
 using Nekoyume.Model.State;
@@ -14,6 +16,11 @@ namespace Nekoyume.BlockChain
 {
     public class BlockPolicy : BlockPolicy<NCAction>
     {
+        private static readonly Dictionary<long, HashAlgorithmType> HashAlgorithmTable =
+            new Dictionary<long, HashAlgorithmType>
+            {
+                [0] = HashAlgorithmType.Of<SHA256>(),
+            };
         private readonly long _minimumDifficulty;
         private readonly long _difficultyBoundDivisor;
         private AuthorizedMinersState _authorizedMinersState;
@@ -74,7 +81,10 @@ namespace Nekoyume.BlockChain
                 doesTransactionFollowPolicy: doesTransactionFollowPolicy,
                 canonicalChainComparer: new CanonicalChainComparer(
                     null,
-                    TimeSpan.FromTicks(blockInterval.Ticks * 10))
+                    TimeSpan.FromTicks(blockInterval.Ticks * 10)),
+#pragma warning disable LAA1002
+                hashAlgorithmGetter: HashAlgorithmTable.ToHashAlgorithmGetter()
+#pragma warning restore LAA1002
             )
         {
             _minimumDifficulty = minimumDifficulty;
@@ -154,10 +164,7 @@ namespace Nekoyume.BlockChain
 
         private InvalidBlockException ValidateBlock(Block<NCAction> block)
         {
-            if (!(block.Miner is Address miner))
-            {
-                return null;
-            }
+            Address miner = block.Miner;
 
             // As a temporary approach to prevent selfish mining (again), we add a new rule
             // disallowing blocks with less than 3 transactions.  This rule is applied since
@@ -200,16 +207,12 @@ namespace Nekoyume.BlockChain
                 return null;
             }
 
-            if (!(block.Miner is Address miner))
-            {
-                return null;
-            }
-
             if (!IsTargetBlock(block.Index))
             {
                 return null;
             }
 
+            Address miner = block.Miner;
             if (!AuthorizedMinersState.Miners.Contains(miner))
             {
                 return new InvalidMinerException(
