@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -14,7 +15,9 @@ using Libplanet.Blocks;
 using Libplanet.RocksDBStore;
 using Libplanet.Store;
 using Libplanet.Store.Trie;
+using Nekoyume.Action;
 using Nekoyume.BlockChain;
+using Nekoyume.Model.State;
 using Serilog;
 using Serilog.Events;
 using NCAction = Libplanet.Action.PolymorphicAction<Nekoyume.Action.ActionBase>;
@@ -38,9 +41,9 @@ namespace Lib9c.Benchmarks
             Libplanet.Crypto.CryptoConfig.CryptoBackend = new Secp256K1CryptoBackend<SHA256>();
             var policySource = new BlockPolicySource(Log.Logger, LogEventLevel.Verbose);
             IBlockPolicy<NCAction> policy =
-                policySource.GetPolicy(BlockPolicySource.DifficultyBoundDivisor + 1, 10000);
+                policySource.GetPolicy(5000000, 10000);
             IStagePolicy<NCAction> stagePolicy = new VolatileStagePolicy<NCAction>();
-            var store = new RocksDBStore(storePath);
+            var store = new MonoRocksDBStore(storePath);
             if (!(store.GetCanonicalChainId() is Guid chainId))
             {
                 Console.Error.WriteLine("There is no canonical chain: {0}", storePath);
@@ -55,65 +58,24 @@ namespace Lib9c.Benchmarks
                 return;
             }
 
-            DateTimeOffset started = DateTimeOffset.UtcNow;
             Block<NCAction> genesis = store.GetBlock<NCAction>(gHash);
+            var mainChain = MainChain(policy, stagePolicy, genesis);
+            if (mainChain.GetState(AuthorizedMinersState.Address) is Dictionary ams &&
+                policy is BlockPolicy bp)
+            {
+                bp.AuthorizedMinersState = new AuthorizedMinersState(ams);
+            }
             IKeyValueStore stateRootKeyValueStore = new RocksDBKeyValueStore(Path.Combine(storePath, "state_hashes")),
                 stateKeyValueStore = new RocksDBKeyValueStore(Path.Combine(storePath, "states"));
             IStateStore stateStore = new TrieStateStore(stateKeyValueStore, stateRootKeyValueStore);
             var chain = new BlockChain<NCAction>(policy, stagePolicy, store, stateStore, genesis);
-            long height = chain.Tip.Index;
-            BlockHash[] blockHashes = limit < 0
-                ? chain.BlockHashes.SkipWhile((_, i) => i < height + limit).ToArray()
-                : chain.BlockHashes.Take(limit).ToArray();
-            Console.Error.WriteLine(
-                "Executing {0} blocks: {1}-{2} (inclusive).",
-                blockHashes.Length,
-                blockHashes[0],
-                blockHashes.Last()
-            );
-            Block<NCAction>[] blocks = blockHashes.Select(h => chain[h]).ToArray();
-            DateTimeOffset blocksLoaded = DateTimeOffset.UtcNow;
-            long txs = 0;
-            long actions = 0;
-            foreach (Block<NCAction> block in blocks)
+            Log.Debug($"{chain.Count}, {mainChain.Count}");
+            var index = 2129034;
+            while (chain.Count < index)
             {
-                Console.Error.WriteLine(
-                    "Block #{0} {1}; {2} txs",
-                    block.Index,
-                    block.Hash,
-                    block.Transactions.Count()
-                );
-
-                IEnumerable<ActionEvaluation> blockEvals;
-                if (block.Index > 0)
-                {
-                    blockEvals = block.Evaluate(
-                        DateTimeOffset.UtcNow,
-                        address => chain.GetState(address, block.Hash),
-                        (address, currency) => chain.GetBalance(address, currency, block.Hash)
-                    );
-                }
-                else
-                {
-                    blockEvals = block.Evaluate(
-                        DateTimeOffset.UtcNow,
-                        _ => null,
-                        ((_, currency) => new FungibleAssetValue(currency))
-                    );
-                }
-                SetStates(chain.Id, stateStore, block, blockEvals.ToArray(), buildStateReferences: true);
-                txs += block.Transactions.LongCount();
-                actions += block.Transactions.Sum(tx => tx.Actions.LongCount()) + 1;
+                var block = mainChain[chain.Count];
+                chain.Append(block);
             }
-
-            DateTimeOffset ended = DateTimeOffset.UtcNow;
-            Console.WriteLine("Loading blocks\t{0}", blocksLoaded - started);
-            long execActionsTotalMilliseconds = (long) (ended - blocksLoaded).TotalMilliseconds;
-            Console.WriteLine("Executing actions\t{0}ms", execActionsTotalMilliseconds);
-            Console.WriteLine("Average per block\t{0}ms", execActionsTotalMilliseconds / blockHashes.Length);
-            Console.WriteLine("Average per tx\t{0}ms", execActionsTotalMilliseconds / txs);
-            Console.WriteLine("Average per action\t{0}ms", execActionsTotalMilliseconds / actions);
-            Console.WriteLine("Total elapsed\t{0}", ended - started);
         }
 
         // Copied from BlockChain<T>.SetStates().
@@ -186,5 +148,16 @@ namespace Lib9c.Benchmarks
         // Copied from KeyConverters.ToFungibleAssetKey().
         private static string ToFungibleAssetKey((Address, Currency) pair) =>
             ToFungibleAssetKey(pair.Item1, pair.Item2);
+
+        private static BlockChain<NCAction> MainChain(IBlockPolicy<NCAction> policy, IStagePolicy<NCAction> stagePolicy,
+            Block<NCAction> genesis)
+        {
+            string mainPath = @"C:\Users\qoora\AppData\Local\planetarium\9c-main-partition";
+            var store = new RocksDBStore(mainPath);
+            IKeyValueStore stateRootKeyValueStore = new RocksDBKeyValueStore(Path.Combine(mainPath, "state_hashes")),
+                stateKeyValueStore = new RocksDBKeyValueStore(Path.Combine(mainPath, "states"));
+            IStateStore stateStore = new TrieStateStore(stateKeyValueStore, stateRootKeyValueStore);
+            return new BlockChain<NCAction>(policy, stagePolicy, store, stateStore, genesis);
+        }
     }
 }
