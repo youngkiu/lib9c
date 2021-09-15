@@ -8,7 +8,7 @@ namespace Nekoyume
 #if UNITY_EDITOR
         public const bool IsEditor = true;
 #else
-        public const bool IsEditor = false;
+        public const bool IsEditor = true;
 #endif
 
         public const int SlotCount = 3;
@@ -45,7 +45,7 @@ namespace Nekoyume
         public const int ArenaScoreDefault = 1000;
         public const int ArenaChallengeCountMax = 5;
         public const int MaximumProbability = 10000;
-        public const int RequiredAppraiseBlock = 50;
+        public const int RequiredAppraiseBlock = IsEditor ? 2 : 50;
 
         #endregion
 

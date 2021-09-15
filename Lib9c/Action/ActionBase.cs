@@ -327,6 +327,7 @@ namespace Nekoyume.Action
 
         protected void CheckPermission(IActionContext ctx)
         {
+            return;
             if (TryGetAdminState(ctx, out AdminState policy))
             {
                 if (ctx.BlockIndex > policy.ValidUntil)
